@@ -1,0 +1,4 @@
+project_id = "coruxfhqovudriizlemc"
+
+[functions.assign-owner-role]
+verify_jwt = false
