@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Trash2, Upload, CheckCircle2, Loader2, MapPin } from 'lucide-react';
+import { Plus, Trash2, Upload, CheckCircle2, MapPin } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AMENITY_OPTIONS } from '@/types/hostel';
@@ -48,6 +48,44 @@ export const AddHostelModal = ({ trigger, ownerId }: AddHostelModalProps) => {
   ]);
   const [images, setImages] = useState<FileList | null>(null);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
+  const [geocoded, setGeocoded] = useState(false);
+
+  /** Extract lat/lng from any Google Maps URL format — no network call needed */
+  const extractCoordsFromUrl = (url: string): { lat: number; lng: number } | null => {
+    if (!url.trim()) return null;
+    // Format 1: /maps/@lat,lng,zoom  or  /maps/place/name/@lat,lng
+    const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (atMatch) return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+    // Format 2: ?q=lat,lng  or  &q=lat,lng
+    const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (qMatch) return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+    // Format 3: !3dlat!4dlng  (embed / share URLs)
+    const dMatch = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    if (dMatch) return { lat: parseFloat(dMatch[1]), lng: parseFloat(dMatch[2]) };
+    // Format 4: ll=lat,lng
+    const llMatch = url.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (llMatch) return { lat: parseFloat(llMatch[1]), lng: parseFloat(llMatch[2]) };
+    return null;
+  };
+
+  const isGoogleMapsUrl = (url: string) =>
+    /google\.com\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(url);
+
+  const handleGoogleMapsLinkChange = (url: string) => {
+    handleInputChange('googleMapsLink', url);
+    const coords = extractCoordsFromUrl(url);
+    if (coords) {
+      setFormData(prev => ({
+        ...prev,
+        googleMapsLink: url,
+        latitude: coords.lat.toFixed(6),
+        longitude: coords.lng.toFixed(6),
+      }));
+      setGeocoded(true);
+    } else {
+      setGeocoded(false);
+    }
+  };
 
   const fetchLocations = async () => {
     const { data, error } = await supabase.from('hostels').select('location');
@@ -295,34 +333,64 @@ export const AddHostelModal = ({ trigger, ownerId }: AddHostelModalProps) => {
                 <Label htmlFor="description">Description *</Label>
                 <Textarea id="description" value={formData.description} onChange={(e) => handleInputChange('description', e.target.value)} placeholder="Describe the hostel facilities and features" rows={3} required />
               </div>
+              {/* Address + Google Maps Link with auto-coordinate extraction */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="address">Full Address *</Label>
-                  <Input id="address" value={formData.address} onChange={(e) => handleInputChange('address', e.target.value)} placeholder="Enter full address" required />
+                  <Input
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) => handleInputChange('address', e.target.value)}
+                    placeholder="Enter full address"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="googleMapsLink">Google Maps Link</Label>
-                  <Input id="googleMapsLink" value={formData.googleMapsLink} onChange={(e) => handleInputChange('googleMapsLink', e.target.value)} placeholder="Enter Google Maps URL" />
+                  <Label htmlFor="googleMapsLink" className="flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    Google Maps Link
+                    {geocoded && (
+                      <span className="ml-auto flex items-center gap-1 text-[11px] font-semibold text-success">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Coordinates detected
+                      </span>
+                    )}
+                  </Label>
+                  <Input
+                    id="googleMapsLink"
+                    value={formData.googleMapsLink}
+                    onChange={(e) => handleGoogleMapsLinkChange(e.target.value)}
+                    placeholder="Paste your Google Maps link here"
+                    className={geocoded ? 'border-success/60 focus-visible:ring-success/30' : ''}
+                  />
+                  {formData.googleMapsLink && !geocoded && isGoogleMapsUrl(formData.googleMapsLink) && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                      ⚠️ Coordinates not found in this link — try sharing the link from the Google Maps <strong>Share</strong> button for a full URL.
+                    </p>
+                  )}
+                  {!formData.googleMapsLink && (
+                    <p className="text-[11px] text-muted-foreground">
+                      💡 Open Google Maps → find the hostel → tap <strong>Share</strong> → copy link. Coordinates fill automatically.
+                    </p>
+                  )}
                 </div>
               </div>
-              {/* Coordinates */}
+              {/* Coordinates — auto-filled from Google Maps link, or enter manually */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="latitude" className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-primary" />
-                    Latitude <span className="text-muted-foreground font-normal text-xs">(for map pin)</span>
+                    Latitude <span className="text-muted-foreground font-normal text-xs">(auto-filled from link)</span>
                   </Label>
                   <Input id="latitude" type="number" step="any" value={formData.latitude} onChange={(e) => handleInputChange('latitude', e.target.value)} placeholder="e.g. 5.6037" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="longitude" className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5 text-primary" />
-                    Longitude <span className="text-muted-foreground font-normal text-xs">(for map pin)</span>
+                    Longitude <span className="text-muted-foreground font-normal text-xs">(auto-filled from link)</span>
                   </Label>
                   <Input id="longitude" type="number" step="any" value={formData.longitude} onChange={(e) => handleInputChange('longitude', e.target.value)} placeholder="e.g. -0.1870" />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">💡 Tip: Open Google Maps, right-click your hostel location → copy the coordinates shown.</p>
             </CardContent>
           </Card>
 

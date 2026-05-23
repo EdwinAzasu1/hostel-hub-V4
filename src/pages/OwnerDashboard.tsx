@@ -23,6 +23,7 @@ const OwnerDashboard = () => {
   const [hostels, setHostels] = useState<(Hostel & { status?: string; rejectionReason?: string | null })[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [ownerName, setOwnerName] = useState<string>('');
   const [selectedHostel, setSelectedHostel] = useState<Hostel | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editModalMode, setEditModalMode] = useState<'view' | 'edit'>('view');
@@ -51,6 +52,19 @@ const OwnerDashboard = () => {
     if (!roleData) { navigate('/owner'); return; }
     setUserId(session.user.id);
     fetchHostels(session.user.id);
+    // Fetch the owner's display name from profiles
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', session.user.id)
+      .single();
+    if (profile) {
+      // Use full_name if available, otherwise derive first name from email
+      const name = profile.full_name
+        ? profile.full_name.split(' ')[0]   // first name only
+        : session.user.email?.split('@')[0] ?? 'Owner';
+      setOwnerName(name);
+    }
   };
 
   const fetchHostels = async (uid: string) => {
@@ -148,15 +162,34 @@ const OwnerDashboard = () => {
       <Header />
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
         {/* Dashboard Header */}
-        <div className="flex items-center justify-between mb-10 animate-fade-in-down">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold mb-3">
-              <Building2 className="h-3.5 w-3.5" />Owner Dashboard
+        <div className="flex items-start justify-between mb-10 animate-fade-in-down gap-4">
+          <div className="flex items-center gap-4">
+            {/* Owner avatar initial */}
+            {ownerName && (
+              <div className="hidden sm:flex h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground items-center justify-center text-2xl font-bold shadow-lg shadow-primary/20 flex-shrink-0">
+                {ownerName.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold mb-2">
+                <Building2 className="h-3.5 w-3.5" />Owner Dashboard
+              </div>
+              {ownerName ? (
+                <>
+                  <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">
+                    Welcome back, {ownerName}! 👋
+                  </h1>
+                  <p className="text-muted-foreground mt-1">Manage your hostel listings below</p>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">My Hostels</h1>
+                  <p className="text-muted-foreground mt-1">Manage your hostel listings</p>
+                </>
+              )}
             </div>
-            <h1 className="text-3xl md:text-4xl font-display font-bold text-foreground">My Hostels</h1>
-            <p className="text-muted-foreground mt-1">Manage your hostel listings</p>
           </div>
-          <Button onClick={handleLogout} variant="outline" className="h-10 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all duration-300 flex items-center gap-2">
+          <Button onClick={handleLogout} variant="outline" className="h-10 rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:border-destructive/50 transition-all duration-300 flex items-center gap-2 flex-shrink-0">
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">Logout</span>
           </Button>
