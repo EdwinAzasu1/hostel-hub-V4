@@ -34,8 +34,58 @@ const OwnerDashboard = () => {
   const [chatHostel, setChatHostel] = useState<{ id: string; name: string } | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
-  useEffect(() => { checkAuth(); }, []);
+  useEffect(() => {
+    // getSession() reliably reads the persisted session from localStorage on every
+    // mount — whether the user just logged in (session already established) or
+    // refreshed the page (session restored from storage). This is the correct
+    // place to do the initial auth check.
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/owner');
+        return;
+      }
+      // Verify the user has the hostel_owner role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .eq('role', 'hostel_owner')
+        .single();
+      if (!roleData) {
+        navigate('/owner');
+        return;
+      }
+      setUserId(session.user.id);
+      fetchHostels(session.user.id);
+      // Fetch display name from profiles
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', session.user.id)
+        .single();
+      if (profile) {
+        const name = profile.full_name
+          ? profile.full_name.split(' ')[0]
+          : session.user.email?.split('@')[0] ?? 'Owner';
+        setOwnerName(name);
+      }
+    };
 
+    initAuth();
+
+    // Also watch for sign-out events (e.g. token expiry, logout from another tab)
+    // so we redirect back to login automatically.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        navigate('/owner');
+      }
+    });
+
+    return () => { subscription.unsubscribe(); };
+  }, []);
+
+  // Real-time subscription for hostel table changes
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
@@ -45,29 +95,7 @@ const OwnerDashboard = () => {
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) { navigate('/owner'); return; }
-    const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', session.user.id).eq('role', 'hostel_owner').single();
-    if (!roleData) { navigate('/owner'); return; }
-    setUserId(session.user.id);
-    fetchHostels(session.user.id);
-    // Fetch the owner's display name from profiles
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, email')
-      .eq('id', session.user.id)
-      .single();
-    if (profile) {
-      // Use full_name if available, otherwise derive first name from email
-      const name = profile.full_name
-        ? profile.full_name.split(' ')[0]   // first name only
-        : session.user.email?.split('@')[0] ?? 'Owner';
-      setOwnerName(name);
-    }
-  };
-
-  const fetchHostels = async (uid: string) => {
+ const fetchHostels = async (uid: string) => {
     try {
       setLoading(true);
       const { data: hostelsData, error } = await supabase

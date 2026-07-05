@@ -51,6 +51,9 @@ export const ChatPanel = ({
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // Flag to suppress real-time DELETE events during a programmatic clear,
+  // preventing a race where fetchMessages() re-runs before all rows are gone.
+  const clearingRef = useRef(false);
 
   // Fetch messages + subscribe to live changes when panel opens
   useEffect(() => {
@@ -86,7 +89,11 @@ export const ChatPanel = ({
           filter: `hostel_id=eq.${hostelId}`,
         },
         () => {
-          // Refetch on any delete (clear chat)
+          // Skip if handleClearChat is managing state directly (avoids race
+          // where a batch delete triggers multiple fetches mid-operation).
+          if (clearingRef.current) return;
+          // Re-fetch from DB to get the accurate post-delete state.
+          // This handles cases where a message is deleted by the other party.
           fetchMessages();
         }
       )
@@ -137,13 +144,21 @@ export const ChatPanel = ({
     setInput('');
     setSending(true);
     try {
-      const { error } = await supabase.from('chat_messages').insert({
+      const { data, error } = await supabase.from('chat_messages').insert({
         hostel_id: hostelId,
         sender_id: currentUserId,
         sender_role: currentUserRole,
         message: text,
-      });
+      }).select().single();
       if (error) throw error;
+      // Optimistically append the sent message so the sender sees it immediately,
+      // without waiting for the real-time subscription to fire.
+      if (data) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === (data as ChatMessage).id)) return prev;
+          return [...prev, data as ChatMessage];
+        });
+      }
     } catch {
       setInput(text); // restore input on failure
       toast({ title: 'Error', description: 'Failed to send message.', variant: 'destructive' });
@@ -154,6 +169,7 @@ export const ChatPanel = ({
 
   const handleClearChat = async () => {
     setClearing(true);
+    clearingRef.current = true; // suppress real-time DELETE events during bulk clear
     try {
       const { error } = await supabase
         .from('chat_messages')
@@ -167,6 +183,9 @@ export const ChatPanel = ({
     } finally {
       setClearing(false);
       setClearDialogOpen(false);
+      // Re-enable real-time DELETE handling after a short delay so any
+      // in-flight DELETE events from the bulk clear are drained first.
+      setTimeout(() => { clearingRef.current = false; }, 1000);
     }
   };
 
