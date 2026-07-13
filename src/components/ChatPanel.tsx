@@ -174,12 +174,28 @@ export const ChatPanel = ({
       const { error } = await supabase
         .from('chat_messages')
         .delete()
-        .eq('hostel_id', hostelId);
+        .eq('hostel_id', hostelId)
+        .gt('created_at', '1970-01-01'); // ensure PostgREST does not reject the request as a no-filter safety guard
       if (error) throw error;
+
+      // Verify deletion actually persisted in the DB (RLS may silently block)
+      const { data: remaining, error: checkError } = await supabase
+        .from('chat_messages')
+        .select('id')
+        .eq('hostel_id', hostelId)
+        .limit(1);
+      if (checkError) throw checkError;
+      if (remaining && remaining.length > 0) {
+        throw new Error('Messages could not be deleted. You may not have permission.');
+      }
+
       setMessages([]);
       toast({ title: 'Chat cleared', description: 'All messages have been deleted.' });
-    } catch {
-      toast({ title: 'Error', description: 'Failed to clear chat.', variant: 'destructive' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to clear chat.';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+      // Restore messages from DB so UI stays in sync
+      fetchMessages();
     } finally {
       setClearing(false);
       setClearDialogOpen(false);
