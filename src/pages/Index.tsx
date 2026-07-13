@@ -192,9 +192,9 @@ const Index = () => {
                 { icon: Users, value: totalRooms, label: 'Total Rooms', color: 'from-white/20 to-white/10' },
                 { icon: TrendingUp, value: availableRooms, label: 'Available', color: 'from-success/30 to-success/10' }
               ].map((stat, i) => (
-                <div key={i} className={`text-center p-5 md:p-6 rounded-2xl bg-gradient-to-br ${stat.color} backdrop-blur-md border border-white/20 hover:border-white/40 transition-all duration-500 hover:-translate-y-1 hover:shadow-lg group`}>
+                <div key={i} className={`text-center p-5 md:p-6 rounded-2xl bg-gradient-to-br ${stat.color} backdrop-blur-md border border-white/25 hover:border-white/45 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_16px_48px_rgba(0,0,0,0.25)] group`}>
                   <div className="flex justify-center mb-3">
-                    <div className="p-2.5 rounded-xl bg-white/10 group-hover:bg-white/20 transition-colors">
+                    <div className="p-2.5 rounded-xl bg-white/12 group-hover:bg-white/22 transition-colors">
                       <stat.icon className="h-6 w-6 text-white" />
                     </div>
                   </div>
@@ -264,14 +264,14 @@ const Index = () => {
             {loading ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
                 {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div key={i} className="animate-pulse rounded-2xl overflow-hidden bg-card shadow-card">
-                    <div className="bg-gradient-to-br from-muted to-muted/50 h-56" />
+                  <div key={i} className="animate-pulse rounded-3xl overflow-hidden glass-card">
+                    <div className="bg-gradient-to-br from-muted/60 to-muted/30 h-56" />
                     <div className="p-6 space-y-4">
-                      <div className="h-6 bg-muted rounded-lg w-3/4" />
-                      <div className="h-4 bg-muted rounded-lg w-1/2" />
-                      <div className="h-4 bg-muted rounded-lg w-full" />
-                      <div className="h-4 bg-muted rounded-lg w-2/3" />
-                      <div className="h-12 bg-gradient-to-r from-primary/20 to-accent/20 rounded-xl w-full" />
+                      <div className="h-6 bg-muted/60 rounded-xl w-3/4" />
+                      <div className="h-4 bg-muted/50 rounded-lg w-1/2" />
+                      <div className="h-4 bg-muted/50 rounded-lg w-full" />
+                      <div className="h-4 bg-muted/50 rounded-lg w-2/3" />
+                      <div className="h-12 bg-gradient-to-r from-primary/15 to-accent/15 rounded-2xl w-full" />
                     </div>
                   </div>
                 ))}
