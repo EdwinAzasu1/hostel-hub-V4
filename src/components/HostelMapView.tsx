@@ -106,6 +106,19 @@ const GL_CSS = `
   .maplibregl-popup-close-button:hover { background: rgba(0,0,0,0.15) !important; color: #222 !important; }
   .maplibregl-canvas { cursor: grab !important; }
   .maplibregl-canvas:active { cursor: grabbing !important; }
+  /* Hover name tooltip — compact pill */
+  .hostel-name-tooltip .maplibregl-popup-content {
+    border-radius: 12px !important;
+    padding: 0 !important;
+    background: rgba(255,255,255,0.92) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    box-shadow: 0 4px 16px rgba(100,80,220,0.18), 0 1px 4px rgba(0,0,0,0.06),
+                inset 0 1px 0 rgba(255,255,255,0.9) !important;
+    border: 1px solid rgba(124,58,237,0.2) !important;
+    pointer-events: none !important;
+  }
+  .hostel-name-tooltip .maplibregl-popup-close-button { display: none !important; }
   @keyframes pin-drop {
     0%   { transform: translateY(-20px) scale(0.8); opacity: 0; }
     60%  { transform: translateY(4px)  scale(1.05); opacity: 1; }
@@ -267,10 +280,11 @@ interface HostelMapViewProps {
 const CU_CENTER = { longitude: -0.0674, latitude: 5.7428 };
 
 export const HostelMapView = ({ hostels, onViewDetails }: HostelMapViewProps) => {
-  const [search,   setSearch]   = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const [popup,    setPopup]    = useState<string | null>(null);
-  const [mapStyle, setMapStyle] = useState<StyleKey>('street');
+  const [search,    setSearch]   = useState('');
+  const [selected,  setSelected] = useState<string | null>(null);
+  const [popup,     setPopup]    = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [mapStyle,  setMapStyle] = useState<StyleKey>('street');
   const [styleOpen, setStyleOpen] = useState(false);
   const [viewState, setViewState] = useState({
     longitude: CU_CENTER.longitude,
@@ -380,7 +394,7 @@ export const HostelMapView = ({ hostels, onViewDetails }: HostelMapViewProps) =>
       </div>
 
       {/* ── Main layout ──────────────────────────────────────────────── */}
-      <div className="flex flex-col lg:flex-row gap-4" style={{ height: 640 }}>
+      <div className="flex flex-col lg:flex-row gap-4" style={{ height: 'calc(100vh - 180px)', minHeight: 560 }}>
 
         {/* ── Sidebar ─────────────────────────────────────────────────── */}
         <div className="lg:w-72 xl:w-80 flex-shrink-0 flex flex-col glass-card rounded-3xl overflow-hidden border border-[var(--glass-border)]">
@@ -552,15 +566,59 @@ export const HostelMapView = ({ hostels, onViewDetails }: HostelMapViewProps) =>
                 anchor="bottom"
                 onClick={e => { e.originalEvent.stopPropagation(); handleMarkerClick(h); }}
               >
-                <Pin
-                  available={h.availableRooms > 0}
-                  selected={selected === h.id}
-                  price={h.startingPrice}
-                />
+                <div
+                  onMouseEnter={() => { if (popup !== h.id) setHoveredId(h.id); }}
+                  onMouseLeave={() => setHoveredId(null)}
+                >
+                  <Pin
+                    available={h.availableRooms > 0}
+                    selected={selected === h.id}
+                    price={h.startingPrice}
+                  />
+                </div>
               </Marker>
             ))}
 
-            {/* Popup */}
+            {/* Hover name tooltip */}
+            {(() => {
+              const hh = hoveredId && popup !== hoveredId
+                ? withCoords.find(h => h.id === hoveredId)
+                : null;
+              return hh ? (
+                <Popup
+                  longitude={hh.longitude!}
+                  latitude={hh.latitude!}
+                  anchor="bottom"
+                  offset={[0, -68]}
+                  closeButton={false}
+                  closeOnClick={false}
+                  className="hostel-name-tooltip"
+                  maxWidth="220px"
+                >
+                  <div style={{
+                    fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif",
+                    padding: '8px 12px',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: hh.availableRooms > 0 ? '#7c3aed' : '#6b7280',
+                      boxShadow: hh.availableRooms > 0 ? '0 0 6px #a78bfa' : 'none',
+                    }} />
+                    <div>
+                      <p style={{ fontSize: 13, fontWeight: 700, color: '#1a0a3a', margin: 0, lineHeight: 1.3 }}>
+                        {hh.name}
+                      </p>
+                      <p style={{ fontSize: 10, color: '#7c3aed', fontWeight: 600, margin: '2px 0 0' }}>
+                        ₵{hh.startingPrice.toLocaleString()}/yr
+                      </p>
+                    </div>
+                  </div>
+                </Popup>
+              ) : null;
+            })()}
+
+            {/* Click popup */}
             {popupHostel && (
               <Popup
                 longitude={popupHostel.longitude!}
